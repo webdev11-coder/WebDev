@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Schedule Organizer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap">
+<style>
+:root{--bg:#F3F1FA;--panel:#FFFFFF;--ink:#241F3A;--muted:#6C6786;--line:#DAD6EA;--accent:#5B4BDB;--accent-ink:#FFFFFF;--today:#E8E4FA;--bad:#B3382C;
+--c-class:#5B4BDB;--c-study:#14867A;--c-exam:#C23B3B;--c-life:#B77A00;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15122A;--panel:#1E1A38;--ink:#ECE9FA;--muted:#9B96B8;--line:#332E55;--accent:#8E82FF;--accent-ink:#15122A;--today:#2A2550;--bad:#F08A7E;--c-class:#8E82FF;--c-study:#3FC4B3;--c-exam:#F07B7B;--c-life:#E9B13B}}
+:root[data-theme="dark"]{--bg:#15122A;--panel:#1E1A38;--ink:#ECE9FA;--muted:#9B96B8;--line:#332E55;--accent:#8E82FF;--accent-ink:#15122A;--today:#2A2550;--bad:#F08A7E;--c-class:#8E82FF;--c-study:#3FC4B3;--c-exam:#F07B7B;--c-life:#E9B13B}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Outfit,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.4}
+main{max-width:1000px;margin:0 auto;padding:28px 16px 56px}
+h1{font-size:2rem;font-weight:800;letter-spacing:-.02em;margin:0 0 4px}
+h2{font-size:1.1rem;margin:0 0 12px}
+.sub{color:var(--muted);margin:0 0 18px}
+.next{background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:14px 16px;margin-bottom:18px;font-weight:600}
+.next small{display:block;font-weight:400;opacity:.85}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
+.f{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:4px}
+input,select{width:100%;padding:10px 12px;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px}
+button{font:inherit;cursor:pointer}
+.btn{padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.alt{background:var(--today);color:var(--ink)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.warn{color:var(--bad);font-size:.9rem;margin:0 0 10px;min-height:1.2em}
+.week{display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:8px;overflow-x:auto;padding-bottom:6px}
+.day{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;min-height:140px}
+.day.today{background:var(--today);border-color:var(--accent)}
+.day h3{margin:0 0 8px;font-size:.95rem}
+.ev{width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:8px;padding:6px 8px;margin-bottom:6px;color:var(--ink)}
+.ev b{display:block;font-size:.9rem;overflow-wrap:anywhere}
+.ev span{display:block;font-size:.78rem;color:var(--muted)}
+.none{color:var(--muted);font-size:.85rem}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.note{color:var(--muted);font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+  <h1>Schedule</h1>
+  <p class="sub" id="date"></p>
+  <div class="next" id="next"></div>
+
+  <div class="panel">
+    <h2 id="ftitle">Add to your week</h2>
+    <div class="f">
+      <div><label for="title">What</label><input id="title" maxlength="50" placeholder="Maths lecture"></div>
+      <div><label for="day">Day</label><select id="day"></select></div>
+      <div><label for="start">Starts</label><input id="start" type="time" value="09:00"></div>
+      <div><label for="end">Ends</label><input id="end" type="time" value="10:00"></div>
+      <div><label for="place">Place (optional)</label><input id="place" maxlength="40" placeholder="Room 204"></div>
+      <div><label for="cat">Type</label><select id="cat">
+        <option value="class">Class</option><option value="study">Study</option>
+        <option value="exam">Exam</option><option value="life">Personal</option></select></div>
+    </div>
+    <div class="warn" id="warn" role="status"></div>
+    <div class="acts">
+      <button class="btn" id="save">Add to schedule</button>
+      <button class="btn alt" id="cancel" hidden>Cancel edit</button>
+      <button class="btn alt" id="del" hidden>Delete</button>
+    </div>
+  </div>
+
+  <h2>This week</h2>
+  <div class="week" id="week"></div>
+  <p class="note">Tap an item to edit or delete it. The app warns you if two items overlap on the same day.</p>
+</main>
+<script>
+(function(){
+  var KEY="schedule-v1",ev=[],editing=null;
+  try{var r=localStorage.getItem(KEY);if(r)ev=JSON.parse(r)||[];}catch(e){ev=[];}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(ev));}catch(e){}}
+  function $(id){return document.getElementById(id);}
+  function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
+  var NAMES=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+  function dow(d){return (d.getDay()+6)%7;}
+  var now=new Date(),todayIdx=dow(now);
+  $("date").textContent=now.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+  NAMES.forEach(function(n,i){var o=el("option",null,n);o.value=i;$("day").appendChild(o);});
+  $("day").value=todayIdx;
+  function mins(t){var p=t.split(":");return (+p[0])*60+(+p[1]);}
+  function fmt(t){var p=t.split(":"),h=+p[0],ap=h>=12?"pm":"am";h=h%12||12;return h+":"+p[1]+ap;}
+  function sorted(d){return ev.filter(function(e){return e.day===d;}).sort(function(a,b){return mins(a.start)-mins(b.start);});}
+
+  function clash(n){
+    return ev.some(function(e){return e.id!==n.id&&e.day===n.day&&mins(n.start)<mins(e.end)&&mins(e.start)<mins(n.end);});
+  }
+  function reset(){
+    editing=null;$("title").value="";$("place").value="";$("warn").textContent="";
+    $("ftitle").textContent="Add to your week";$("save").textContent="Add to schedule";
+    $("cancel").hidden=true;$("del").hidden=true;
+  }
+  $("save").onclick=function(){
+    var t=$("title").value.trim();
+    if(!t){$("warn").textContent="Enter what this is, like \"Physics lab\".";$("title").focus();return;}
+    var s=$("start").value,e=$("end").value;
+    if(!s||!e||mins(e)<=mins(s)){$("warn").textContent="The end time must be after the start time.";return;}
+    var n={id:editing||Date.now(),title:t,day:+$("day").value,start:s,end:e,place:$("place").value.trim(),cat:$("cat").value};
+    var c=clash(n);
+    if(editing){ev=ev.map(function(x){return x.id===editing?n:x;});}else{ev.push(n);}
+    save();reset();render();
+    if(c)$("warn").textContent="Saved, but it overlaps with another item on that day.";
+  };
+  $("cancel").onclick=reset;
+  $("del").onclick=function(){
+    if(editing&&confirm("Delete this item?")){ev=ev.filter(function(x){return x.id!==editing;});save();reset();render();}
+  };
+  function edit(e){
+    editing=e.id;$("title").value=e.title;$("day").value=e.day;$("start").value=e.start;$("end").value=e.end;
+    $("place").value=e.place||"";$("cat").value=e.cat;
+    $("ftitle").textContent="Edit item";$("save").textContent="Save changes";
+    $("cancel").hidden=false;$("del").hidden=false;$("title").focus();window.scrollTo({top:0,behavior:"smooth"});
+  }
+
+  function render(){
+    var w=$("week");w.innerHTML="";
+    NAMES.forEach(function(n,i){
+      var d=el("div","day"+(i===todayIdx?" today":""));d.appendChild(el("h3",null,n+(i===todayIdx?" (today)":"")));
+      var list=sorted(i);
+      if(!list.length)d.appendChild(el("div","none","Free"));
+      list.forEach(function(e){
+        var b=el("button","ev");b.style.setProperty("--c","var(--c-"+e.cat+")");
+        b.appendChild(el("b",null,e.title));
+        b.appendChild(el("span",null,fmt(e.start)+" – "+fmt(e.end)));
+        if(e.place)b.appendChild(el("span",null,e.place));
+        b.setAttribute("aria-label",e.title+", "+n+", "+fmt(e.start)+" to "+fmt(e.end)+". Tap to edit.");
+        b.onclick=function(){edit(e);};d.appendChild(b);
+      });
+      w.appendChild(d);
+    });
+    var nx=$("next");nx.innerHTML="";
+    var cur=now.getHours()*60+now.getMinutes();
+    var up=sorted(todayIdx).filter(function(e){return mins(e.end)>cur;})[0];
+    if(up){
+      var going=mins(up.start)<=cur;
+      nx.appendChild(el("span",null,(going?"Now: ":"Up next: ")+up.title));
+      nx.appendChild(el("small",null,fmt(up.start)+" – "+fmt(up.end)+(up.place?" · "+up.place:"")));
+    }else{
+      nx.appendChild(el("span",null,ev.length?"Nothing more scheduled today.":"Your week is empty."));
+      nx.appendChild(el("small",null,ev.length?"Enjoy the free time.":"Add your first class or study session below."));
+    }
+  }
+  render();
+})();
+</script>
+</body>
+</html>
